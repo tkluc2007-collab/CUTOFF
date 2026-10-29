@@ -7,7 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-/** Runs the cutoff experiment and writes results/raw.csv. */
+/** Runs the cutoff experiment and writes the requested CSV output. */
 public final class Benchmark {
     private static final int[] CUTOFFS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100};
     private static final String[] ALGORITHMS = {"mergesort", "quicksort"};
@@ -16,16 +16,19 @@ public final class Benchmark {
     public static void main(String[] args) throws IOException {
         String sizeOption = System.getProperty("sizes", "10000,100000,1000000");
         String repsOption = System.getProperty("reps");
+        String outputOption = System.getProperty("output", "results/raw.csv");
         for (String arg : args) {
             if (arg.startsWith("--sizes=")) sizeOption = arg.substring("--sizes=".length());
             else if (arg.startsWith("--reps=")) repsOption = arg.substring("--reps=".length());
+            else if (arg.startsWith("--output=")) outputOption = arg.substring("--output=".length());
             else throw new IllegalArgumentException("Unknown option: " + arg);
         }
         int[] sizes = parseSizes(sizeOption);
         Integer forcedReps = repsOption == null ? null : Integer.valueOf(repsOption);
-        Path results = Path.of("results");
-        Files.createDirectories(results);
-        try (BufferedWriter out = Files.newBufferedWriter(results.resolve("raw.csv"))) {
+        Path output = Path.of(outputOption);
+        Path parent = output.getParent();
+        if (parent != null) Files.createDirectories(parent);
+        try (BufferedWriter out = Files.newBufferedWriter(output)) {
             out.write("algo,dist,n,cutoff,rep,time_ns\n");
             for (String algorithm : ALGORITHMS) {
                 for (String distribution : DISTRIBUTIONS) {

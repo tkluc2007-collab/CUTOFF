@@ -16,12 +16,17 @@ def main():
     if not raw_path.exists():
         raise SystemExit(f"Missing {raw_path}; run scripts/run_all.sh first.")
     raw = pd.read_csv(raw_path)
+    n1e6_path = RESULTS / "raw_n1e6.csv"
+    if n1e6_path.exists():
+        raw_n1e6 = pd.read_csv(n1e6_path)
+        raw = pd.concat([raw[raw["n"] != 1_000_000], raw_n1e6], ignore_index=True)
     required = {"algo", "dist", "n", "cutoff", "rep", "time_ns"}
     if missing := required - set(raw.columns):
         raise SystemExit(f"raw.csv missing columns: {sorted(missing)}")
     raw["time_ms"] = raw["time_ns"] / 1_000_000
     summary = (raw.groupby(["algo", "dist", "n", "cutoff"], as_index=False)["time_ms"]
-               .agg(median_ms="median", mean_ms="mean", std_ms="std", min_ms="min", n_reps="count"))
+               .agg(median_ms="median", mean_ms="mean", std_ms="std", min_ms="min",
+                    iqr_ms=lambda values: values.quantile(0.75) - values.quantile(0.25), n_reps="count"))
     summary["std_ms"] = summary["std_ms"].fillna(0.0)
     summary.to_csv(RESULTS / "summary.csv", index=False)
     best = make_best(summary)
@@ -36,13 +41,15 @@ def make_best(summary):
         group = group.sort_values("cutoff")
         winner = group.loc[group["median_ms"].idxmin()]
         best_ms = winner.median_ms
-        near = group.loc[group["median_ms"] <= best_ms * 1.02, "cutoff"].astype(str).tolist()
+        within_two_percent = group["median_ms"] <= best_ms * 1.02
+        within_noise = group["median_ms"] - best_ms <= winner.iqr_ms
+        near = group.loc[within_two_percent | within_noise, "cutoff"].astype(str).tolist()
         at_7 = group.loc[group.cutoff == 7, "median_ms"].iloc[0]
         at_10 = group.loc[group.cutoff == 10, "median_ms"].iloc[0]
         rows.append({
             "algo": algo, "dist": dist, "n": n,
             "best_cutoff": int(winner.cutoff), "best_median_ms": best_ms,
-            "near_best_cutoffs_2pct": ";".join(near),
+            "near_best_cutoffs_2pct_or_iqr": ";".join(near),
             "median_ms_cutoff_7": at_7, "pct_over_best_cutoff_7": (at_7 / best_ms - 1) * 100,
             "median_ms_cutoff_10": at_10, "pct_over_best_cutoff_10": (at_10 / best_ms - 1) * 100,
         })
@@ -87,10 +94,10 @@ def make_plots(summary):
 
 
 def print_recap(best):
-    print("Best cutoff recap (median timing; near-best is within 2%):")
+    print("Best cutoff recap (near-best is within 2% or one best-cutoff IQR):")
     for row in best.itertuples(index=False):
         print(f"{row.algo:9} {row.dist:8} n={row.n:<7} best={row.best_cutoff:<3} "
-              f"{row.best_median_ms:.3f} ms; near={row.near_best_cutoffs_2pct}; "
+              f"{row.best_median_ms:.3f} ms; near={row.near_best_cutoffs_2pct_or_iqr}; "
               f"7: {row.pct_over_best_cutoff_7:+.1f}%, 10: {row.pct_over_best_cutoff_10:+.1f}%")
 
 
