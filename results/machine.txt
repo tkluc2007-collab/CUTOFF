@@ -1,6 +1,9 @@
 OS: Windows 10 10.0
-CPU: Intel64 Family 6 Model 78 Stepping 3, GenuineIntel
-Cores: 4
-RAM: 8467230720 bytes
+CPU: Intel(R) Core(TM) i5-6200U @ 2.30GHz (max 2400 MHz)
+Physical cores: 2
+Logical processors: 4
+L2 cache: 512 KB total (256 KB per core)
+L3 cache: 3072 KB (3 MB, shared)
+RAM: 8467230720 bytes (~7.9 GB)
 Java: 21.0.11+10-LTS
 JVM flags: -Xms2g -Xmx2g -XX:+UseSerialGC
