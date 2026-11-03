@@ -1,4 +1,3 @@
-/** Insertion sort on an inclusive subarray. */
 public final class Insertion {
     private Insertion() { }
 

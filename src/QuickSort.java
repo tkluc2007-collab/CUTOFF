@@ -1,6 +1,5 @@
 import java.util.Random;
 
-/** Quicksort from the lecture, including Fisher-Yates shuffling. */
 public final class QuickSort {
     private QuickSort() { }
 
@@ -8,7 +7,6 @@ public final class QuickSort {
         sort(a, cutoff, 42L);
     }
 
-    /** Uses a caller-supplied fixed seed so a benchmark repetition is reproducible. */
     public static void sort(int[] a, int cutoff, long shuffleSeed) {
         if (cutoff < 1) throw new IllegalArgumentException("cutoff must be >= 1");
         shuffle(a, new Random(shuffleSeed));

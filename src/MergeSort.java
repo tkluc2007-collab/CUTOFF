@@ -1,4 +1,3 @@
-/** Top-down mergesort from the lecture, with an insertion-sort cutoff. */
 public final class MergeSort {
     private MergeSort() { }
 

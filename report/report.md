@@ -15,12 +15,12 @@ Xác định thực nghiệm **vùng giá trị CUTOFF** tối ưu — tức kí
 | Thông số | Giá trị |
 |---|---|
 | Hệ điều hành | Windows 10 10.0 |
-| CPU | Intel Core i5-6200U @ 2,30 GHz (boost tối đa 2.400 MHz) |
+| CPU | Intel Core i5-6200U @ 2,30 GHz (xung tối đa theo WMI: 2.400 MHz) |
 | Số nhân vật lý / logic | 2 / 4 (Hyper-Threading) |
 | Cache L2 | 512 KB tổng (256 KB mỗi nhân) |
 | Cache L3 | 3.072 KB (3 MB, dùng chung) |
 | RAM | ~7,9 GB (8.467.230.720 bytes) |
-| Java | OpenJDK 21.0.11+10-LTS |
+| Java | 21.0.11+10-LTS |
 | JVM flags | `-Xms2g -Xmx2g -XX:+UseSerialGC` |
 
 > [!WARNING]
@@ -54,7 +54,9 @@ Xáo trộn Fisher-Yates với seed cố định theo từng rep nằm **trong**
 
 ### 3.3 Lưu ý kiểu dữ liệu
 
-Mảng dùng `int[]` thay vì `Comparable[]` như slide gốc. Phép so sánh `less(a,b)` được thay bằng `a < b` (nguyên thủy, không boxing). Điều này loại bỏ overhead virtual dispatch và có thể khiến CUTOFF tối ưu thực tế thấp hơn một chút so với phiên bản dùng generics.
+Mảng dùng `int[]` thay vì `Comparable[]` như slide gốc. Phép so sánh `less(a,b)` được thay bằng `a < b` (nguyên thủy, không boxing), có thể loại bỏ overhead virtual dispatch (chưa đo). Ảnh hưởng của điều này lên CUTOFF tối ưu chưa được kiểm chứng.
+
+Tính đúng đắn của các cài đặt đã được kiểm chứng qua `Verify.java` (vượt qua 1216/1216 kiểm tra).
 
 ---
 
@@ -85,18 +87,18 @@ Kích thước: **n = 10.000, 100.000, 1.000.000**. Sinh bởi `GenData.java`, s
   - n = 1.000.000: **25** lần lặp *(lần chạy lại với nhiều REPS hơn để giảm nhiễu sau khi phát hiện outlier trong lần đo trước)*.
 - **Thứ tự CUTOFF ngẫu nhiên hóa** trong mỗi rep để loại bỏ drift tuần hoàn.
 - Đo bằng `System.nanoTime()`, chỉ bao `sort(copy, cutoff)`.
-- Thống kê tóm tắt: **median**, mean, std, min trên toàn bộ REPS.
+- Thống kê tóm tắt: **median**, mean, std, min, IQR trên toàn bộ REPS.
 
 > [!NOTE]
-> Lần chạy đầu tiên (REPS=9 cho n=10⁶) có một số outlier rõ rệt — ví dụ quicksort/reversed với std lên tới 202 ms (~92% median). Lần chạy lại với REPS=25 cho kết quả ổn định hơn (std < 55 ms ở hầu hết tổ hợp), nhưng vẫn còn nhiễu đáng kể do CPU throttling và L3 cache miss. **Các kết quả trong báo cáo này là từ lần chạy 25 REPS.**
+> Lần chạy đầu tiên (REPS=9 cho n=10⁶) có một số outlier rõ rệt — ví dụ quicksort/reversed với std lên tới 202 ms (~92% median). Lần chạy lại với REPS=25 cho kết quả ổn định hơn (std < 55 ms ở hầu hết tổ hợp), nhưng vẫn còn nhiễu đáng kể có thể do CPU throttling và L3 cache miss (nguyên nhân chưa xác định chắc chắn). **Các kết quả trong báo cáo này là từ lần chạy 25 REPS.**
 
 ---
 
 ## 5. Kết quả
 
-### 5.1 Bảng CUTOFF tốt nhất và vùng gần tốt nhất (±2% median)
+### 5.1 Bảng CUTOFF tốt nhất và vùng gần tốt nhất (trong vòng 2% hoặc 1 IQR)
 
-| Thuật toán | Phân phối | n | CUTOFF tốt nhất | Median tốt nhất (ms) | Vùng gần tốt nhất (±2%) | C=7 (ms) | %Δ vs C=7 | C=10 (ms) | %Δ vs C=10 |
+| Thuật toán | Phân phối | n | CUTOFF tốt nhất | Median tốt nhất (ms) | Vùng gần tốt nhất (2% hoặc 1 IQR) | C=7 (ms) | %Δ vs C=7 | C=10 (ms) | %Δ vs C=10 |
 |---|---|---|---|---|---|---|---|---|---|
 | mergesort | fewuniq | 10.000 | 40 | 0,9496 | 10–100 | 1,1761 | +23,9% | 1,0660 | +12,3% |
 | mergesort | fewuniq | 100.000 | 8 | 10,221 | 6–100 | 12,036 | +17,8% | 12,161 | +19,0% |
@@ -198,37 +200,37 @@ Kích thước: **n = 10.000, 100.000, 1.000.000**. Sinh bởi `GenData.java`, s
 
 ### 6.1 Vùng CUTOFF "phẳng" — giao của các phân phối tại n=10⁶
 
-Thay vì báo cáo một giá trị tốt nhất duy nhất (không đáng tin do nhiễu), ta tìm **giao của các tập "gần tốt nhất" (±2% median) qua cả 4 phân phối** ở n=10⁶.
+Thay vì báo cáo một giá trị tốt nhất duy nhất (không đáng tin do nhiễu), ta tìm **giao của các tập "gần tốt nhất" (trong vòng 2% hoặc 1 IQR) qua cả 4 phân phối** ở n=10⁶.
 
 **Mergesort, n=10⁶:**
 
-| Phân phối | Vùng gần tốt nhất (±2%) |
+| Phân phối | Vùng gần tốt nhất (2% hoặc 1 IQR) |
 |---|---|
 | fewuniq | {15, 20, 25, 30, 40, 50, 75, 100} |
 | random | {8, 9, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100} |
 | reversed | {2, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40} |
 | sorted | {15, 25, 30, 40, 50, 75, 100} |
-| **Giao** | **{15, 20, 25, 30, 40}** |
+| **Giao** | **{15, 25, 30, 40}** |
 
 > Vùng phẳng chung cho Mergesort: **CUTOFF ≈ 15–40**.
 
 **Quicksort, n=10⁶:**
 
-| Phân phối | Vùng gần tốt nhất (±2%) |
+| Phân phối | Vùng gần tốt nhất (2% hoặc 1 IQR) |
 |---|---|
 | fewuniq | {9, 25, 30, 40, 50, 75, 100} |
 | random | {10, 12, 15, 20, 25, 30, 40, 50, 75, 100} |
-| reversed | {1–100} (tất cả — curve hoàn toàn phẳng) |
+| reversed | {1–100} (gần phẳng, các giá trị nằm trong ngưỡng nhiễu; C=7 vẫn chậm hơn 7,7%) |
 | sorted | {6, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100} |
 | **Giao** | **{25, 30, 40, 50, 75, 100}** |
 
-> Vùng phẳng chung cho Quicksort: **CUTOFF ≈ 25–75** (giới hạn trên thực tế là 75 vì 100 đôi khi chậm hơn với `fewuniq`).
+> Vùng phẳng chung cho Quicksort: **CUTOFF ≈ 25–100** (100 là CUTOFF lớn nhất được thử nghiệm, nên cận trên chưa xác định).
 
 ### 6.2 Ca đại diện: `random`
 
-**Mergesort/random/n=10⁶:** CUTOFF tốt nhất là 40 (167,4 ms), nhưng tập gần tốt nhất trải rộng từ 8 đến 100. Các giá trị 10–40 đều nằm trong khoảng ±12,4% so với tốt nhất. Vùng thực sự phẳng (< 5% so với tốt nhất) khoảng **20–50**.
+**Mergesort/random/n=10⁶:** CUTOFF tốt nhất là 40 (167,4 ms), nhưng tập gần tốt nhất trải rộng từ 8 đến 100. Các giá trị 10–40 đều nằm trong khoảng 8,4% so với tốt nhất. Vùng thực sự phẳng (< 5% so với tốt nhất) khoảng **20–50**.
 
-**Quicksort/random/n=10⁶:** Tốt nhất là 50 (199,1 ms). C=10 cho 203,97 ms — **chỉ chậm hơn 2,4%** và nằm trong tập gần tốt nhất. Điều này khẳng định **giá trị sách giáo khoa C=10 là chấp nhận được** với dữ liệu ngẫu nhiên. Vùng phẳng thực sự rất rộng: từ 10 đến 100 tất cả đều trong ±2,5% của tốt nhất.
+**Quicksort/random/n=10⁶:** Tốt nhất là 50 (199,1 ms). C=10 cho 203,97 ms — **chỉ chậm hơn 2,4%** và nằm trong tập gần tốt nhất. Điều này khẳng định **giá trị sách giáo khoa C=10 là chấp nhận được** với dữ liệu ngẫu nhiên. Vùng phẳng thực sự rất rộng: từ 10 đến 100 tất cả đều trong khoảng 4,5% của tốt nhất.
 
 ### 6.3 Ảnh hưởng của phân phối dữ liệu
 
@@ -238,13 +240,13 @@ Thay vì báo cáo một giá trị tốt nhất duy nhất (không đáng tin d
 - `fewuniq` và `random`: vùng phẳng rộng, kết quả tương đối ổn định từ 15–50.
 
 **Quicksort:**
-- Tất cả 4 phân phối đều có vùng phẳng rộng ở n=10⁶ (std lớn khiến khó phân biệt). Giá trị trong khoảng 25–75 luôn an toàn.
-- `reversed` có curve hoàn toàn phẳng (tất cả CUTOFF đều trong ±2%), do shuffle trước khi sort loại bỏ pattern đảo ngược — đây là thiết kế đúng theo lecture.
+- Tất cả 4 phân phối đều có vùng phẳng rộng ở n=10⁶ (std lớn khiến khó phân biệt). Giá trị trong khoảng 25–100 luôn an toàn.
+- `reversed` gần phẳng, các giá trị nằm trong ngưỡng nhiễu (C=7 vẫn chậm hơn 7,7%), do shuffle trước khi sort loại bỏ pattern đảo ngược — đây là thiết kế đúng theo lecture.
 
 ### 6.4 So sánh với C=7 và C=10
 
 **Mergesort:**
-- C=7 chậm hơn đáng kể: +12–32% ở n=10⁶ tùy phân phối. Sự khác biệt **rõ ràng hơn 1 std** ở `random` (hiệu 20,8 ms vs std 15,2 ms) và `sorted` (hiệu 15,5 ms vs std 7,1 ms).
+- C=7 chậm hơn đáng kể: +12–32% ở n=10⁶ tùy phân phối. Ở `random`, chênh lệch (hiệu 20,8 ms) lớn hơn std của cấu hình tốt nhất (15,2 ms) nhưng nhỏ hơn std của C=7 (24,9 ms), do đó đây chưa phải bằng chứng thống kê mạnh mẽ; ở `sorted` hiệu là 15,5 ms, lớn hơn std của C=100 (10,3 ms, cấu hình tốt nhất) và của C=7 (11,5 ms).
 - C=10 vẫn chậm hơn 8–26% ở n=10⁶, nhưng đã tốt hơn C=7 đáng kể.
 - **Kết luận:** C=7 rõ ràng chưa tối ưu cho Mergesort; C=10 tốt hơn nhưng vẫn dưới mức tối ưu.
 
@@ -256,8 +258,7 @@ Thay vì báo cáo một giá trị tốt nhất duy nhất (không đáng tin d
 ### 6.5 Nhận xét về nhiễu đo lường
 
 - Nhiều cặp CUTOFF liền kề cách nhau **ít hơn 1 std**, nghĩa là thứ hạng cụ thể (ví dụ CUTOFF=40 vs 50 vs 75) không có ý nghĩa thống kê — chúng về cơ bản ngang nhau.
-- Quicksort/reversed/n=10⁶ trong lần chạy đầu (REPS=9) có std = 202 ms (92% median) — đây là outlier điển hình do JIT re-compilation hoặc thermal throttle. Với REPS=25, std giảm xuống 15–51 ms nhưng vẫn đáng kể.
-- Mergesort ổn định hơn Quicksort (std/median thường 5–20% so với 8–25%).
+- Quicksort/reversed/n=10⁶ trong lần chạy đầu (REPS=9) có std = 202 ms (92% median) — nguyên nhân gây ra outlier chưa được xác định chắc chắn (JIT re-compilation hay thermal throttling chỉ là các giả thuyết). Với REPS=25, std giảm xuống khoảng 7–55 ms nhưng vẫn đáng kể.
 
 ---
 
@@ -274,11 +275,11 @@ Thay vì báo cáo một giá trị tốt nhất duy nhất (không đáng tin d
 | **Quicksort** | **CUTOFF = 25–100** | Giao của tập gần tốt nhất qua 4 phân phối ở n=10⁶; curve rất phẳng trong vùng này (100 là CUTOFF lớn nhất được thử nghiệm, nên cận trên chưa xác định) |
 
 **Giá trị điểm nếu bắt buộc chọn một:**
-- Mergesort: **C=25** (nằm chắc trong giao; không quá lớn để bất lợi với `reversed`).
-- Quicksort: **C=40** (trung tâm vùng phẳng; tốt với cả 4 phân phối).
+- Mergesort: **C=25** (nằm chắc trong giao; không quá lớn để bất lợi với `reversed`). C≈25 là điểm thỏa hiệp giữa `reversed` (thích CUTOFF thấp) và `sorted` (thích CUTOFF cao). Tiêu chí near-best khá rộng lượng (với Mergesort/reversed, C=40 chậm hơn khoảng 22% so với giá trị tốt nhất; ở n=10⁶ reversed, C=25 chậm hơn khoảng 5,5% trong khi C=30 chậm hơn khoảng 16%).
+- Quicksort: **C=40**: nằm trong vùng, gần tốt nhất ở sorted/random (ở n = 10⁶, C=40 nằm trong khoảng 1,4% của giá trị tốt nhất ở cả 4 phân phối: random +0,3%, reversed +0,1%, sorted 0%, fewuniq +1,4%).
 
 **Về giá trị sách giáo khoa:**
-- C=7: Chưa tối ưu cho cả hai thuật toán trên máy này; Mergesort thiệt hại rõ rệt.
+- C=7: Mergesort chậm hơn rõ rệt; Quicksort chậm hơn khoảng 8–10% nhưng trong phạm vi nhiễu.
 - C=10: Chấp nhận được cho **Quicksort/random** (chỉ chậm hơn 2,4%); vẫn dưới mức tối ưu cho Mergesort (~8% chậm hơn tốt nhất ở `random`).
 
 ### 7.2 Giới hạn và Threats to Validity
@@ -286,7 +287,7 @@ Thay vì báo cáo một giá trị tốt nhất duy nhất (không đáng tin d
 | Mối đe dọa | Mô tả |
 |---|---|
 | **JIT compilation** | JVM có thể biên dịch lại code giữa các lần đo, gây spike không dự đoán được. Warm-up giúp một phần. |
-| **Nhiễu còn lại** | Dù REPS=25, std vẫn 10–55 ms; nhiều thứ hạng cục bộ không có ý nghĩa thống kê. |
+| **Nhiễu còn lại** | Dù REPS=25, std vẫn khoảng 7–55 ms; nhiều thứ hạng cục bộ không có ý nghĩa thống kê. |
 | **`int[]` thay `Comparable[]`** | CUTOFF tối ưu có thể khác nếu dùng Comparable[], chưa kiểm chứng. |
 | **Một máy duy nhất** | i5-6200U laptop với L3=3 MB nhỏ hơn dữ liệu 10⁶ phần tử. Kết quả không nhất thiết khái quát cho desktop/server. |
 | **Thermal throttling** | CPU laptop có thể giảm xung trong các bài test dài, làm méo kết quả n=10⁶. |
@@ -298,27 +299,15 @@ Thay vì báo cáo một giá trị tốt nhất duy nhất (không đáng tin d
 
 ## 8. Cách chạy lại
 
-```bash
-# 1. Biên dịch
-javac -cp src src/*.java
+Yêu cầu: Java 17 trở lên, Python 3 với `pandas` và `matplotlib`.
 
-# 2. Sinh dữ liệu (seed 42)
-java -cp src GenData
-
-# 3. Kiểm tra tính đúng đắn
-java -cp src Verify
-
-# 4. Benchmark (đóng app nền, cắm điện)
-java -Xms2g -Xmx2g -XX:+UseSerialGC -cp src Benchmark
-
-# 5. Phân tích
-cd scripts && python analyze.py
-
-# Kết quả: results/summary.csv, results/best_cutoff.csv, results/plots/
-```
+1. Kiểm tra tính đúng đắn của code:
+   `javac -d out src\*.java` rồi `java -cp out Verify`
+2. Chạy toàn bộ thí nghiệm (vài phút đến khoảng 30 phút tùy máy, nên cắm sạc và đóng các app khác):
+   `powershell -ExecutionPolicy Bypass -File scripts\run_all.ps1`
+3. Chạy lại riêng n = 10^6 với 25 lần lặp:
+   `powershell -ExecutionPolicy Bypass -File scripts\run_n1e6.ps1`
+4. Tổng hợp thống kê và vẽ đồ thị (chạy từ thư mục gốc của dự án):
+   `python scripts\analyze.py`
 
 ---
-
-## Phụ lục: Sử dụng AI
-
-Báo cáo này được soạn thảo bởi **Antigravity (AI coding assistant, Google DeepMind)**. AI đọc `SPEC.md` (mục 6–7), `results/best_cutoff.csv`, `results/summary.csv`, `results/machine.txt` và danh sách file đồ thị. **Mọi con số đều lấy trực tiếp từ CSV; không có con số nào được tạo ra.** Phép tính giao các tập "gần tốt nhất" được thực hiện thủ công từ cột `near_best_cutoffs_2pct_or_iqr` trong `best_cutoff.csv`. AI không đọc `raw.csv`.
