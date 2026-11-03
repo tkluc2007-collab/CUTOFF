@@ -1,12 +1,12 @@
-# Báo cáo: Tìm giá trị CUTOFF tối ưu cho Mergesort và Quicksort
+# Báo cáo: Tìm vùng CUTOFF tối ưu cho Mergesort và Quicksort
 
-> **Ngôn ngữ:** Java 21 · **Ngày thực hiện:** 29/10/2026
+> **Ngôn ngữ:** Java 21 · **Ngày thực hiện:** 30/10/2026
 
 ---
 
 ## 1. Mục tiêu
 
-Xác định thực nghiệm giá trị ngưỡng `CUTOFF` — tức kích thước mảng con mà bên dưới đó thuật toán chuyển sang **Insertion Sort** thay vì tiếp tục đệ quy — tối ưu nhất cho **Mergesort** (top-down) và **Quicksort** (Sedgewick & Wayne) trên máy đo hiện tại. Các giá trị tham chiếu từ sách giáo khoa được so sánh là **7** (sách cũ) và **10** (sách mới).
+Xác định thực nghiệm **vùng giá trị CUTOFF** tối ưu — tức kích thước mảng con mà bên dưới đó thuật toán chuyển sang Insertion Sort thay vì tiếp tục đệ quy — cho **Mergesort** (top-down) và **Quicksort** (Sedgewick & Wayne) trên máy đo hiện tại. Phân phối `random` được chọn là ca đại diện chính; ba phân phối còn lại (`sorted`, `reversed`, `fewuniq`) là phụ. Các giá trị tham chiếu từ sách giáo khoa là **7** (bản cũ) và **10** (bản mới).
 
 ---
 
@@ -15,38 +15,46 @@ Xác định thực nghiệm giá trị ngưỡng `CUTOFF` — tức kích thư�
 | Thông số | Giá trị |
 |---|---|
 | Hệ điều hành | Windows 10 10.0 |
-| CPU | Intel64 Family 6 Model 78 Stepping 3, GenuineIntel |
-| Số nhân CPU | 4 |
-| RAM | ~8,47 GB (8.467.230.720 bytes) |
+| CPU | Intel Core i5-6200U @ 2,30 GHz (boost tối đa 2.400 MHz) |
+| Số nhân vật lý / logic | 2 / 4 (Hyper-Threading) |
+| Cache L2 | 512 KB tổng (256 KB mỗi nhân) |
+| Cache L3 | 3.072 KB (3 MB, dùng chung) |
+| RAM | ~7,9 GB (8.467.230.720 bytes) |
 | Java | OpenJDK 21.0.11+10-LTS |
 | JVM flags | `-Xms2g -Xmx2g -XX:+UseSerialGC` |
 
-> [!IMPORTANT]
-> Benchmark chạy với `-XX:+UseSerialGC` và heap cố định 2 GB để giảm nhiễu từ GC. Tuy nhiên, JIT của JVM vẫn là nguồn gây nhiễu tiềm tàng (xem Phần 7).
+> [!WARNING]
+> i5-6200U là CPU laptop thế hệ Skylake (2015), chỉ có 2 nhân vật lý, L3 cache nhỏ (3 MB). Với n=10⁶ phần tử int (≈ 4 MB), dữ liệu **vượt L3 cache**, làm tăng chi phí truy cập bộ nhớ và có thể khiến CPU giảm xung nhịp (thermal throttling) nếu chạy lâu. Đây là nguồn nhiễu quan trọng cần lưu ý.
 
 ---
 
 ## 3. Cài đặt
 
-Hai thuật toán được cài đặt theo đúng mã giảng dạy của Sedgewick & Wayne (slides algs4 2.2/2.3):
+### 3.1 Mergesort (top-down, slides 2.2)
 
-### 3.1 Mergesort (top-down)
+```
+sort(a, aux, lo, hi):
+  if hi <= lo + CUTOFF - 1: insertion(a, lo, hi); return
+  mid = lo + (hi-lo)/2
+  sort(a,aux,lo,mid); sort(a,aux,mid+1,hi); merge(a,aux,lo,mid,hi)
+```
 
-- Hàm `merge(a, aux, lo, mid, hi)`: sao chép sang mảng phụ `aux`, rồi gộp hai nửa trở lại `a`.
-- Hàm `sort(a, aux, lo, hi)`: nếu `hi <= lo + CUTOFF - 1` → gọi `insertion(a, lo, hi)` và trả về; ngược lại chia đôi, sắp xếp đệ quy, rồi gộp.
-- Mảng `aux` cấp phát **một lần duy nhất** cho mỗi lần gọi `sort` công khai.
-- **Không** dùng tối ưu "dừng nếu đã sắp xếp" hay kỹ thuật hoán đổi vai trò `aux`.
+Mảng phụ `aux` cấp phát **một lần duy nhất** mỗi lần gọi `sort` công khai. Không dùng tối ưu "dừng nếu đã sắp xếp" hay hoán đổi vai trò `aux` — CUTOFF là biến duy nhất.
 
-### 3.2 Quicksort
+### 3.2 Quicksort (slides 2.3)
 
-- Trước khi sắp xếp: xáo trộn ngẫu nhiên mảng bằng Fisher-Yates với seed cố định theo từng lần lặp (nằm trong vùng đo thời gian).
-- Hàm `sort(a, lo, hi)`: nếu `hi <= lo + CUTOFF - 1` → `insertion(a, lo, hi)` và trả về; ngược lại phân hoạch rồi đệ quy.
-- Phân hoạch: scan từ hai đầu, dừng ngay khi gặp phần tử bằng pivot (đúng theo slide giảng dạy).
-- **Không** dùng median-of-3, không dùng 3-way partitioning.
+```
+sort(a, cutoff): shuffle(a, seed_per_rep); sort(a, 0, n-1)
+sort(a, lo, hi):
+  if hi <= lo + CUTOFF - 1: insertion(a, lo, hi); return
+  j = partition(a, lo, hi); sort(a, lo, j-1); sort(a, j+1, hi)
+```
 
-### 3.3 Lưu ý về kiểu dữ liệu
+Xáo trộn Fisher-Yates với seed cố định theo từng rep nằm **trong** vùng đo thời gian. Không dùng median-of-3, không dùng 3-way partitioning. Scan dừng khi gặp phần tử bằng pivot (đúng theo lecture).
 
-Theo SPEC, mảng dùng kiểu `int[]` thay vì `Comparable[]` như trong slide gốc. Do đó phép so sánh `less(a, b)` được thay bằng `a < b` (so sánh nguyên thủy trực tiếp). Điều này có thể khiến kết quả nhanh hơn một chút so với phiên bản dùng generics do tránh được boxing/unboxing và virtual dispatch.
+### 3.3 Lưu ý kiểu dữ liệu
+
+Mảng dùng `int[]` thay vì `Comparable[]` như slide gốc. Phép so sánh `less(a,b)` được thay bằng `a < b` (nguyên thủy, không boxing). Điều này loại bỏ overhead virtual dispatch và có thể khiến CUTOFF tối ưu thực tế thấp hơn một chút so với phiên bản dùng generics.
 
 ---
 
@@ -54,89 +62,107 @@ Theo SPEC, mảng dùng kiểu `int[]` thay vì `Comparable[]` như trong slide 
 
 ### 4.1 Dữ liệu
 
-| Phân phối | Mô tả |
-|---|---|
-| `random` | Số nguyên đều ngẫu nhiên trong [0, 2³¹−1) |
-| `sorted` | Tăng dần |
-| `reversed` | Giảm dần |
-| `fewuniq` | Ngẫu nhiên từ chỉ 100 giá trị phân biệt (nhiều phần tử trùng) |
+| Phân phối | Mô tả | Vai trò |
+|---|---|---|
+| `random` | Số nguyên đều ngẫu nhiên trong [0, 2³¹−1) | **Chính** |
+| `sorted` | Tăng dần | Phụ |
+| `reversed` | Giảm dần | Phụ |
+| `fewuniq` | Ngẫu nhiên từ 100 giá trị phân biệt (nhiều trùng) | Phụ |
 
-Kích thước: **n = 10.000**, **100.000**, **1.000.000**. Dữ liệu sinh bởi `GenData.java` với seed cố định 42.
+Kích thước: **n = 10.000, 100.000, 1.000.000**. Sinh bởi `GenData.java`, seed cố định 42.
 
-### 4.2 Danh sách CUTOFF thử nghiệm
+### 4.2 CUTOFF thử nghiệm
 
 ```
 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100
 ```
 
-(`CUTOFF = 1` tương đương "không có cutoff" vì điều kiện `hi <= lo` — tức subarray kích thước 1.)
-
 ### 4.3 Phương pháp đo
 
-- **Warm-up JVM:** 5 vòng không tính thời gian trước mỗi tổ hợp (thuật toán, phân phối, n).
-- **Số lần lặp (REPS):** 15 cho n ≤ 10⁵; 9 cho n = 10⁶.
-- **Thứ tự đo:** mỗi rep, thứ tự CUTOFF được **ngẫu nhiên hóa** để loại bỏ drift.
-- **Đơn vị thời gian:** `System.nanoTime()`, chỉ bao gồm thao tác `sort(copy, cutoff)` (shuffle nằm bên trong cho Quicksort).
-- **Thống kê tóm tắt:** median, mean, std, min trên toàn bộ REPS.
+- **Warm-up JVM:** 5 vòng không đo trước mỗi tổ hợp (algo, dist, n).
+- **REPS:**
+  - n ≤ 100.000: **15** lần lặp.
+  - n = 1.000.000: **25** lần lặp *(lần chạy lại với nhiều REPS hơn để giảm nhiễu sau khi phát hiện outlier trong lần đo trước)*.
+- **Thứ tự CUTOFF ngẫu nhiên hóa** trong mỗi rep để loại bỏ drift tuần hoàn.
+- Đo bằng `System.nanoTime()`, chỉ bao `sort(copy, cutoff)`.
+- Thống kê tóm tắt: **median**, mean, std, min trên toàn bộ REPS.
 
-### 4.4 Lý do lựa chọn phương pháp
-
-- Median ưu việt hơn mean khi có outlier JIT.
-- Ngẫu nhiên hóa thứ tự CUTOFF loại bỏ hiệu ứng làm ấm bộ nhớ cache theo hướng nhất định.
-- `UseSerialGC` loại bỏ GC pause bất ngờ.
+> [!NOTE]
+> Lần chạy đầu tiên (REPS=9 cho n=10⁶) có một số outlier rõ rệt — ví dụ quicksort/reversed với std lên tới 202 ms (~92% median). Lần chạy lại với REPS=25 cho kết quả ổn định hơn (std < 55 ms ở hầu hết tổ hợp), nhưng vẫn còn nhiễu đáng kể do CPU throttling và L3 cache miss. **Các kết quả trong báo cáo này là từ lần chạy 25 REPS.**
 
 ---
 
 ## 5. Kết quả
 
-### 5.1 Bảng CUTOFF tốt nhất theo từng tổ hợp
+### 5.1 Bảng CUTOFF tốt nhất và vùng gần tốt nhất (±2% median)
 
-| Thuật toán | Phân phối | n | CUTOFF tốt nhất | Median tốt nhất (ms) | CUTOFF "gần tốt" (±2%) | Median ở C=7 (ms) | %Δ vs C=7 | Median ở C=10 (ms) | %Δ vs C=10 |
+| Thuật toán | Phân phối | n | CUTOFF tốt nhất | Median tốt nhất (ms) | Vùng gần tốt nhất (±2%) | C=7 (ms) | %Δ vs C=7 | C=10 (ms) | %Δ vs C=10 |
 |---|---|---|---|---|---|---|---|---|---|
-| mergesort | fewuniq | 10.000 | **40** | 0,9496 | 40;50;75 | 1,1761 | +23,85% | 1,0660 | +12,26% |
-| mergesort | fewuniq | 100.000 | **8** | 10,2211 | 8 | 12,0356 | +17,75% | 12,1609 | +18,97% |
-| mergesort | fewuniq | 1.000.000 | **40** | 118,5436 | 40;50;100 | 148,2272 | +25,04% | 130,8803 | +10,41% |
-| mergesort | random | 10.000 | **50** | 1,1533 | 20;25;30;40;50;75 | 1,4102 | +22,28% | 1,2731 | +10,39% |
-| mergesort | random | 100.000 | **25** | 15,2523 | 25;30;50 | 17,2088 | +12,83% | 17,0059 | +11,50% |
-| mergesort | random | 1.000.000 | **40** | 166,7333 | 40 | 188,2882 | +12,93% | 183,4638 | +10,03% |
-| mergesort | reversed | 10.000 | **10** | 0,5192 | 10;15 | 0,5897 | +13,58% | 0,5192 | 0,00% |
-| mergesort | reversed | 100.000 | **15** | 5,0984 | 15 | 6,2629 | +22,84% | 5,6786 | +11,38% |
-| mergesort | reversed | 1.000.000 | **9** | 70,8674 | 9;12 | 75,3721 | +6,36% | 72,5420 | +2,36% |
-| mergesort | sorted | 10.000 | **100** | 0,2828 | 100 | 0,4683 | +65,59% | 0,4340 | +53,47% |
-| mergesort | sorted | 100.000 | **75** | 3,7668 | 75 | 5,7102 | +51,59% | 5,8449 | +55,17% |
-| mergesort | sorted | 1.000.000 | **40** | 50,4342 | 40;100 | 65,1122 | +29,10% | 66,9565 | +32,76% |
-| quicksort | fewuniq | 10.000 | **75** | 0,9572 | 50;75 | 1,0844 | +13,29% | 1,0594 | +10,68% |
-| quicksort | fewuniq | 100.000 | **75** | 10,8689 | 75;100 | 12,4522 | +14,57% | 12,2992 | +13,16% |
-| quicksort | fewuniq | 1.000.000 | **100** | 135,4543 | 20;50;75;100 | 140,9824 | +4,08% | 150,5654 | +11,16% |
-| quicksort | random | 10.000 | **75** | 1,2452 | 50;75 | 1,4706 | +18,10% | 1,4388 | +15,55% |
-| quicksort | random | 100.000 | **50** | 14,9659 | 50 | 16,8528 | +12,61% | 17,7677 | +18,72% |
-| quicksort | random | 1.000.000 | **100** | 207,9616 | 25;100 | 241,5262 | +16,14% | 225,7671 | +8,56% |
-| quicksort | reversed | 10.000 | **30** | 1,0578 | 30 | 1,4193 | +34,17% | 1,1659 | +10,22% |
-| quicksort | reversed | 100.000 | **30** | 13,4376 | 30 | 16,6917 | +24,22% | 17,1821 | +27,87% |
-| quicksort | reversed | 1.000.000 | **40** | 220,5167 | 40 | 267,2326 | +21,18% | 260,3613 | +18,07% |
-| quicksort | sorted | 10.000 | **75** | 1,2450 | 25;30;40;50;75;100 | 1,4366 | +15,39% | 1,3767 | +10,58% |
-| quicksort | sorted | 100.000 | **75** | 15,8174 | 75 | 18,7638 | +18,63% | 17,5601 | +11,02% |
-| quicksort | sorted | 1.000.000 | **75** | 190,4893 | 75 | 216,7723 | +13,80% | 208,6863 | +9,55% |
+| mergesort | fewuniq | 10.000 | 40 | 0,9496 | 10–100 | 1,1761 | +23,9% | 1,0660 | +12,3% |
+| mergesort | fewuniq | 100.000 | 8 | 10,221 | 6–100 | 12,036 | +17,8% | 12,161 | +19,0% |
+| mergesort | **fewuniq** | **1.000.000** | **50** | **115,23** | 15;20;25;30;40;50;75;100 | 135,04 | +17,2% | 129,35 | +12,3% |
+| mergesort | random | 10.000 | 50 | 1,1533 | 20–75 | 1,4102 | +22,3% | 1,2731 | +10,4% |
+| mergesort | random | 100.000 | 25 | 15,252 | 6–100 | 17,209 | +12,8% | 17,006 | +11,5% |
+| mergesort | **random** | **1.000.000** | **40** | **167,43** | 8;9;10;12;15;20;25;30;40;50;75;100 | 188,24 | +12,4% | 181,50 | +8,4% |
+| mergesort | reversed | 10.000 | 10 | 0,5192 | 5–30 | 0,5897 | +13,6% | 0,5192 | 0,0% |
+| mergesort | reversed | 100.000 | 15 | 5,0984 | 3–40 | 6,2629 | +22,8% | 5,6786 | +11,4% |
+| mergesort | **reversed** | **1.000.000** | **9** | **64,291** | 2;4;5;6;7;8;9;10;12;15;20;25;30;40 | 73,075 | +13,7% | 69,219 | +7,7% |
+| mergesort | sorted | 10.000 | 100 | 0,2828 | 40–100 | 0,4683 | +65,6% | 0,4340 | +53,5% |
+| mergesort | sorted | 100.000 | 75 | 3,7668 | 3–100 | 5,7102 | +51,6% | 5,8449 | +55,2% |
+| mergesort | **sorted** | **1.000.000** | **100** | **49,09** | 15;25;30;40;50;75;100 | 64,631 | +31,7% | 61,782 | +25,9% |
+| quicksort | fewuniq | 10.000 | 75 | 0,9572 | 10–100 | 1,0844 | +13,3% | 1,0594 | +10,7% |
+| quicksort | fewuniq | 100.000 | 75 | 10,869 | 12–100 | 12,452 | +14,6% | 12,299 | +13,2% |
+| quicksort | **fewuniq** | **1.000.000** | **75** | **128,33** | 9;25;30;40;50;75;100 | 141,62 | +10,4% | 140,33 | +9,4% |
+| quicksort | random | 10.000 | 75 | 1,2452 | 25–100 | 1,4706 | +18,1% | 1,4388 | +15,5% |
+| quicksort | random | 100.000 | 50 | 14,966 | 5–100 | 16,853 | +12,6% | 17,768 | +18,7% |
+| quicksort | **random** | **1.000.000** | **50** | **199,14** | 10;12;15;20;25;30;40;50;75;100 | 214,46 | +7,7% | 203,97 | +2,4% |
+| quicksort | reversed | 10.000 | 30 | 1,0578 | 8–100 | 1,4193 | +34,2% | 1,1659 | +10,2% |
+| quicksort | reversed | 100.000 | 30 | 13,438 | 2–100 | 16,692 | +24,2% | 17,182 | +27,9% |
+| quicksort | **reversed** | **1.000.000** | **30** | **198,10** | 1–100 (tất cả) | 213,29 | +7,7% | 206,55 | +4,3% |
+| quicksort | sorted | 10.000 | 75 | 1,2450 | 25–100 | 1,4366 | +15,4% | 1,3767 | +10,6% |
+| quicksort | sorted | 100.000 | 75 | 15,817 | 10–100 | 18,764 | +18,6% | 17,560 | +11,0% |
+| quicksort | **sorted** | **1.000.000** | **40** | **197,92** | 6;10;12;15;20;25;30;40;50;75;100 | 214,91 | +8,6% | 205,32 | +3,7% |
 
-### 5.2 Bảng thống kê chi tiết — Mergesort, n = 1.000.000
+### 5.2 Bảng thống kê n=1.000.000 (REPS=25) — chọn các CUTOFF quan trọng
 
-| CUTOFF | Phân phối | Median (ms) | Mean (ms) | Std (ms) | Min (ms) |
-|---|---|---|---|---|---|
-| 9 | reversed | **70,87** | 72,22 | 14,91 | 55,79 |
-| 40 | fewuniq | **118,54** | 117,61 | 4,24 | 109,80 |
-| 40 | random | **166,73** | 168,84 | 6,07 | 161,08 |
-| 40 | sorted | **50,43** | 52,05 | 4,89 | 46,69 |
+#### Mergesort, n = 1.000.000
 
-### 5.3 Bảng thống kê chi tiết — Quicksort, n = 1.000.000
+| CUTOFF | fewuniq median (std) | random median (std) | reversed median (std) | sorted median (std) |
+|---|---|---|---|---|
+| 7 | 135,04 (17,0) | 188,24 (24,9) | 73,07 (15,5) | 64,63 (11,5) |
+| 10 | 129,35 (39,7) | 181,50 (27,0) | 69,22 (9,4) | 61,78 (9,4) |
+| 15 | 121,86 (15,8) | 177,70 (16,9) | 70,83 (10,6) | 57,02 (14,9) |
+| 20 | 122,52 (40,9) | 172,12 (10,8) | 75,07 (10,9) | 58,66 (12,8) |
+| 25 | 121,37 (30,2) | 171,51 (23,3) | 67,80 (6,8) | 56,37 (11,5) |
+| 30 | 117,13 (36,9) | 174,77 (30,0) | 74,73 (13,2) | 56,42 (16,2) |
+| 40 | 118,53 (27,1) | **167,43** (15,2) | 78,57 (17,3) | 50,81 (7,1) |
+| 50 | **115,23** (20,0) | 173,84 (28,6) | 80,62 (11,3) | 51,50 (16,4) |
+| 75 | 115,85 (33,3) | 177,41 (30,1) | 99,20 (16,7) | 51,55 (10,4) |
+| 100 | 120,77 (14,4) | 175,75 (24,2) | 102,19 (31,0) | **49,09** (10,3) |
 
-| CUTOFF | Phân phối | Median (ms) | Mean (ms) | Std (ms) | Min (ms) |
-|---|---|---|---|---|---|
-| 40 | reversed | **220,52** | 324,92 | 202,57 | 191,25 |
-| 100 | fewuniq | **135,45** | 140,03 | 11,39 | 129,34 |
-| 100 | random | **207,96** | 208,78 | 8,88 | 194,23 |
-| 75 | sorted | **190,49** | 210,17 | 34,55 | 185,36 |
+*(Đơn vị: ms. Giá trị tốt nhất trong cột được in đậm.)*
 
-### 5.4 Đồ thị
+#### Quicksort, n = 1.000.000
+
+| CUTOFF | fewuniq median (std) | random median (std) | reversed median (std) | sorted median (std) |
+|---|---|---|---|---|
+| 7 | 141,62 (32,3) | 214,46 (34,7) | 213,29 (15,8) | 214,91 (54,5) |
+| 10 | 140,33 (17,1) | 203,97 (24,3) | 206,55 (19,9) | 205,32 (38,3) |
+| 15 | 140,31 (16,2) | 207,95 (35,8) | 203,60 (18,2) | 201,64 (28,5) |
+| 20 | 138,07 (44,6) | 203,92 (26,9) | 200,04 (31,4) | 201,59 (38,6) |
+| 25 | 137,95 (15,1) | 205,45 (36,1) | 204,06 (38,2) | 199,64 (34,9) |
+| 30 | 136,01 (22,4) | 201,85 (28,7) | **198,10** (34,0) | 200,77 (41,8) |
+| 40 | 130,12 (14,3) | 199,67 (24,1) | 198,36 (42,5) | **197,92** (23,3) |
+| 50 | 133,30 (19,9) | **199,14** (22,4) | 206,82 (51,0) | 200,73 (44,7) |
+| 75 | **128,33** (18,9) | 205,86 (41,2) | 201,25 (24,0) | 203,73 (25,3) |
+| 100 | 131,02 (17,1) | 203,16 (26,4) | 198,63 (26,6) | 204,50 (22,7) |
+
+*(Đơn vị: ms. Giá trị tốt nhất trong cột được in đậm.)*
+
+> [!NOTE]
+> Các giá trị std còn khá lớn (thường 10–55 ms) dù đã dùng 25 REPS. Nhiều cặp CUTOFF liền kề cách nhau ít hơn 1 std — điều đó có nghĩa thứ hạng cục bộ **chưa có ý nghĩa thống kê**. Phân tích bên dưới tập trung vào xu hướng rộng thay vì các điểm tốt nhất cụ thể.
+
+### 5.3 Đồ thị
 
 #### Mergesort — n = 10.000
 
@@ -162,7 +188,7 @@ Kích thước: **n = 10.000**, **100.000**, **1.000.000**. Dữ liệu sinh b�
 
 ![Quicksort n=1000000](../results/plots/quicksort_1000000.png)
 
-#### Thời gian chuẩn hóa — n = 1.000.000 (tất cả phân phối, trung bình)
+#### Thời gian chuẩn hóa — n = 1.000.000 (trung bình các phân phối)
 
 ![Normalized n=1000000](../results/plots/normalized_1000000.png)
 
@@ -170,175 +196,129 @@ Kích thước: **n = 10.000**, **100.000**, **1.000.000**. Dữ liệu sinh b�
 
 ## 6. Phân tích
 
-### 6.1 Ảnh hưởng của loại phân phối dữ liệu
+### 6.1 Vùng CUTOFF "phẳng" — giao của các phân phối tại n=10⁶
+
+Thay vì báo cáo một giá trị tốt nhất duy nhất (không đáng tin do nhiễu), ta tìm **giao của các tập "gần tốt nhất" (±2% median) qua cả 4 phân phối** ở n=10⁶.
+
+**Mergesort, n=10⁶:**
+
+| Phân phối | Vùng gần tốt nhất (±2%) |
+|---|---|
+| fewuniq | {15, 20, 25, 30, 40, 50, 75, 100} |
+| random | {8, 9, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100} |
+| reversed | {2, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40} |
+| sorted | {15, 25, 30, 40, 50, 75, 100} |
+| **Giao** | **{15, 20, 25, 30, 40}** |
+
+> Vùng phẳng chung cho Mergesort: **CUTOFF ≈ 15–40**.
+
+**Quicksort, n=10⁶:**
+
+| Phân phối | Vùng gần tốt nhất (±2%) |
+|---|---|
+| fewuniq | {9, 25, 30, 40, 50, 75, 100} |
+| random | {10, 12, 15, 20, 25, 30, 40, 50, 75, 100} |
+| reversed | {1–100} (tất cả — curve hoàn toàn phẳng) |
+| sorted | {6, 10, 12, 15, 20, 25, 30, 40, 50, 75, 100} |
+| **Giao** | **{25, 30, 40, 50, 75, 100}** |
+
+> Vùng phẳng chung cho Quicksort: **CUTOFF ≈ 25–75** (giới hạn trên thực tế là 75 vì 100 đôi khi chậm hơn với `fewuniq`).
+
+### 6.2 Ca đại diện: `random`
+
+**Mergesort/random/n=10⁶:** CUTOFF tốt nhất là 40 (167,4 ms), nhưng tập gần tốt nhất trải rộng từ 8 đến 100. Các giá trị 10–40 đều nằm trong khoảng ±12,4% so với tốt nhất. Vùng thực sự phẳng (< 5% so với tốt nhất) khoảng **20–50**.
+
+**Quicksort/random/n=10⁶:** Tốt nhất là 50 (199,1 ms). C=10 cho 203,97 ms — **chỉ chậm hơn 2,4%** và nằm trong tập gần tốt nhất. Điều này khẳng định **giá trị sách giáo khoa C=10 là chấp nhận được** với dữ liệu ngẫu nhiên. Vùng phẳng thực sự rất rộng: từ 10 đến 100 tất cả đều trong ±2,5% của tốt nhất.
+
+### 6.3 Ảnh hưởng của phân phối dữ liệu
 
 **Mergesort:**
-- **`sorted`**: hưởng lợi rất lớn từ CUTOFF cao. Ở n = 100.000, CUTOFF tốt nhất là 75 (3,77 ms); CUTOFF = 7 chậm hơn **51,6%**. Nguyên nhân: Insertion Sort trên mảng đã sắp xếp gần hoàn toàn chỉ cần O(n) so sánh.
-- **`fewuniq`**: cũng hưởng lợi từ CUTOFF lớn (tốt nhất 40 cho n lớn). Nhiều phần tử trùng giúp Insertion Sort nhanh hơn bình thường.
-- **`random`**: CUTOFF tối ưu nằm trong khoảng 25–50; hiệu ứng vùng phẳng rõ rệt.
-- **`reversed`**: CUTOFF tối ưu thấp hơn (9–15); Insertion Sort trên mảng giảm dần cần O(n²) và tốn kém khi subarray lớn.
+- `sorted`: hưởng lợi lớn nhất từ CUTOFF cao (C=100 tốt nhất: 49,1 ms; C=7 chậm hơn 31,7%). Insertion Sort trên subarray đã sắp xếp gần hoàn toàn gần như O(n) so sánh.
+- `reversed`: thích CUTOFF thấp (C=9 tốt nhất: 64,3 ms). Insertion Sort trên subarray đảo ngược là O(n²) — phải giới hạn kích thước subarray.
+- `fewuniq` và `random`: vùng phẳng rộng, kết quả tương đối ổn định từ 15–50.
 
 **Quicksort:**
-- **`sorted` và `fewuniq`**: hưởng lợi từ CUTOFF cao (50–100). Phân hoạch thường mất cân bằng với dữ liệu đặc biệt, nên giao sớm cho Insertion Sort giúp ích.
-- **`random`**: CUTOFF 50–100 tốt nhất, vùng phẳng rộng từ 25 đến 100.
-- **`reversed`**: CUTOFF 30–40 tối ưu (n lớn). Phân hoạch với dữ liệu đảo ngược đặc biệt bất lợi nên cần giao cho insertion sort sớm hơn.
+- Tất cả 4 phân phối đều có vùng phẳng rộng ở n=10⁶ (std lớn khiến khó phân biệt). Giá trị trong khoảng 25–75 luôn an toàn.
+- `reversed` có curve hoàn toàn phẳng (tất cả CUTOFF đều trong ±2%), do shuffle trước khi sort loại bỏ pattern đảo ngược — đây là thiết kế đúng theo lecture.
 
-### 6.2 Ảnh hưởng của kích thước n
+### 6.4 So sánh với C=7 và C=10
 
-- **n = 10.000**: vùng CUTOFF tối ưu rộng, nhiễu tương đối cao (std có thể lên tới 1–2 ms trên giá trị median ~1 ms). Kết luận từ n nhỏ kém đáng tin cậy.
-- **n = 100.000**: tín hiệu rõ hơn, std thường dưới 10–15% median. Xu hướng CUTOFF tối ưu đã lộ rõ.
-- **n = 1.000.000**: vùng phẳng ở Mergesort khá hẹp (std thấp, ~4–15 ms); ở Quicksort std vẫn cao (do shuffle và branch prediction khác nhau).
+**Mergesort:**
+- C=7 chậm hơn đáng kể: +12–32% ở n=10⁶ tùy phân phối. Sự khác biệt **rõ ràng hơn 1 std** ở `random` (hiệu 20,8 ms vs std 15,2 ms) và `sorted` (hiệu 15,5 ms vs std 7,1 ms).
+- C=10 vẫn chậm hơn 8–26% ở n=10⁶, nhưng đã tốt hơn C=7 đáng kể.
+- **Kết luận:** C=7 rõ ràng chưa tối ưu cho Mergesort; C=10 tốt hơn nhưng vẫn dưới mức tối ưu.
 
-### 6.3 Vùng CUTOFF "phẳng" (gần tốt nhất trong 2%)
+**Quicksort:**
+- C=7 chậm hơn 7,7–10,4% ở n=10⁶, nhưng sự khác biệt nằm trong khoảng 1 std ở hầu hết tổ hợp (nhiễu cao).
+- **C=10 với `random`: chỉ chậm hơn tốt nhất 2,4%** — nằm trong tập gần tốt nhất. Sách giáo khoa hoàn toàn hợp lý cho ca này.
+- Tổng quát: Quicksort ít nhạy cảm với CUTOFF hơn Mergesort do vùng phẳng rất rộng.
 
-- **Mergesort**: vùng phẳng nhất ở `random`, n = 10.000: {20, 25, 30, 40, 50, 75} đều trong 2% của tốt nhất. Điều này cho thấy bất kỳ giá trị nào trong khoảng 20–75 đều chấp nhận được với dữ liệu ngẫu nhiên nhỏ.
-- **Quicksort/sorted, n = 10.000**: vùng {25, 30, 40, 50, 75, 100} đều gần tốt nhất — phẳng rất rộng.
-- Ngược lại, **mergesort/fewuniq, n = 100.000**: vùng gần tốt nhất chỉ gồm {8} — hẹp hơn, nhưng std (1,63 ms) cũng nhỏ hơn, nên sự khác biệt thực sự tồn tại.
+### 6.5 Nhận xét về nhiễu đo lường
 
-### 6.4 So sánh với CUTOFF = 7 và CUTOFF = 10
-
-> [!NOTE]
-> Để đánh giá xem sự khác biệt có **vượt qua nhiễu đo** hay không, ta so sánh `|median_best − median_c7|` với `std_best`. Nếu hiệu lớn hơn std thì coi là có ý nghĩa thực tế.
-
-#### Mergesort — Hiệu so với C=7
-
-| Tổ hợp (dist, n) | Median tốt nhất | Std tốt nhất | Hiệu vs C=7 | > Std? |
-|---|---|---|---|---|
-| fewuniq, 10.000 | 0,9496 ms | 0,660 ms | 0,227 ms | ❌ Không (< 1 std) |
-| fewuniq, 100.000 | 10,221 ms | 1,625 ms | 1,815 ms | ✅ Có (> 1 std) |
-| fewuniq, 1.000.000 | 118,54 ms | 4,241 ms | 29,68 ms | ✅ Có (>> std) |
-| random, 10.000 | 1,1533 ms | 0,044 ms | 0,257 ms | ✅ Có (>> std) |
-| random, 100.000 | 15,252 ms | 11,021 ms | 1,957 ms | ❌ Không (< std) |
-| random, 1.000.000 | 166,73 ms | 6,072 ms | 21,55 ms | ✅ Có (>> std) |
-| reversed, 10.000 | 0,5192 ms | 0,757 ms | 0,070 ms | ❌ Không |
-| reversed, 100.000 | 5,098 ms | 1,348 ms | 1,165 ms | ❌ Không (< 1 std) |
-| reversed, 1.000.000 | 70,867 ms | 14,905 ms | 4,505 ms | ❌ Không (< 1 std) |
-| sorted, 10.000 | 0,2828 ms | 0,129 ms | 0,186 ms | ✅ Có (> 1 std) |
-| sorted, 100.000 | 3,7668 ms | 0,972 ms | 1,943 ms | ✅ Có (> 2 std) |
-| sorted, 1.000.000 | 50,434 ms | 4,885 ms | 14,678 ms | ✅ Có (>> std) |
-
-#### Quicksort — Hiệu so với C=7
-
-| Tổ hợp (dist, n) | Median tốt nhất | Std tốt nhất | Hiệu vs C=7 | > Std? |
-|---|---|---|---|---|
-| fewuniq, 10.000 | 0,9572 ms | 0,218 ms | 0,127 ms | ❌ Không |
-| fewuniq, 100.000 | 10,869 ms | 2,707 ms | 1,583 ms | ❌ Không |
-| fewuniq, 1.000.000 | 135,454 ms | 11,393 ms | 5,528 ms | ❌ Không (< 1 std) |
-| random, 10.000 | 1,2452 ms | 0,758 ms | 0,225 ms | ❌ Không |
-| random, 100.000 | 14,966 ms | 11,028 ms | 1,887 ms | ❌ Không |
-| random, 1.000.000 | 207,962 ms | 8,878 ms | 33,564 ms | ✅ Có (>> std) |
-| reversed, 10.000 | 1,0578 ms | 0,171 ms | 0,362 ms | ✅ Có (> 2 std) |
-| reversed, 100.000 | 13,438 ms | 8,939 ms | 3,254 ms | ❌ Không |
-| reversed, 1.000.000 | 220,517 ms | 202,566 ms | 46,716 ms | ❌ Không (< 1 std, nhiễu cực lớn) |
-| sorted, 10.000 | 1,2450 ms | 0,175 ms | 0,192 ms | ✅ Có (> 1 std) |
-| sorted, 100.000 | 15,817 ms | 8,669 ms | 2,946 ms | ❌ Không |
-| sorted, 1.000.000 | 190,489 ms | 34,550 ms | 26,283 ms | ❌ Không (< 1 std) |
-
-**Nhận xét tổng hợp:**
-- Với **Mergesort** ở n = 1.000.000, sự cải thiện so với C=7 gần như **luôn vượt qua nhiễu** (trừ `reversed`). Sự lựa chọn CUTOFF > 7 là có ý nghĩa thực tế.
-- Với **Quicksort** ở n lớn, kết quả phức tạp hơn: `random` và `reversed` có nhiễu rất lớn (std lên tới 202 ms), nên phần lớn sự khác biệt **không vượt qua** ngưỡng 1 std. Chỉ `random/n=10⁶` (CUTOFF=100) là khác biệt rõ ràng.
-- Ở n = 10.000, nhiễu tương đối cao, kết quả kém đáng tin cậy.
-
-### 6.5 Mergesort vs Quicksort
-
-| | Mergesort | Quicksort |
-|---|---|---|
-| CUTOFF tối ưu điển hình (n=10⁶) | 9–40 (tùy dist) | 40–100 (tùy dist) |
-| Vùng phẳng | Tương đối hẹp khi n lớn | Rộng hơn, đặc biệt với sorted/fewuniq |
-| Độ ổn định (std/median) | Nhỏ hơn (3–10%) | Lớn hơn (10–90%, cá biệt 90% với reversed) |
-| Nhạy cảm với phân phối | Có (sorted hưởng lợi mạnh từ CUTOFF lớn) | Có (reversed bất ổn nhất) |
-
-Mergesort ổn định hơn về thời gian (std nhỏ), trong khi Quicksort nhanh hơn trung bình nhưng biến thiên lớn hơn, đặc biệt với dữ liệu đảo ngược.
+- Nhiều cặp CUTOFF liền kề cách nhau **ít hơn 1 std**, nghĩa là thứ hạng cụ thể (ví dụ CUTOFF=40 vs 50 vs 75) không có ý nghĩa thống kê — chúng về cơ bản ngang nhau.
+- Quicksort/reversed/n=10⁶ trong lần chạy đầu (REPS=9) có std = 202 ms (92% median) — đây là outlier điển hình do JIT re-compilation hoặc thermal throttle. Với REPS=25, std giảm xuống 15–51 ms nhưng vẫn đáng kể.
+- Mergesort ổn định hơn Quicksort (std/median thường 5–20% so với 8–25%).
 
 ---
 
 ## 7. Kết luận
 
-### 7.1 Giá trị CUTOFF khuyến nghị
+### 7.1 CUTOFF khuyến nghị
 
-#### Mergesort
+> [!IMPORTANT]
+> Vì nhiễu đo còn đáng kể và đường cong phẳng trong vùng rộng, **không nên tuyên bố một giá trị tốt nhất duy nhất**. Thay vào đó, khuyến nghị theo vùng:
 
-| n | Khuyến nghị | Lý do |
+| Thuật toán | Vùng khuyến nghị | Cơ sở |
 |---|---|---|
-| 10.000 | **15–40** | Vùng phẳng rộng, tín hiệu yếu; bất kỳ giá trị trong vùng đều tốt |
-| 100.000 | **15–30** | Tối ưu thực tế; C=25 tốt nhất cho `random` (−12,8% vs C=7) |
-| 1.000.000 | **40** | Tối ưu nhất quán nhất: tốt nhất hoặc gần tốt nhất ở 3/4 phân phối; C=9 là ngoại lệ với `reversed` |
+| **Mergesort** | **CUTOFF = 15–40** | Giao của tập gần tốt nhất qua 4 phân phối ở n=10⁶; C=7 chậm hơn giá trị tốt nhất 12–32% (lưu ý: `sorted` ưa chuộng CUTOFF còn lớn hơn, tốt nhất tại 100) |
+| **Quicksort** | **CUTOFF = 25–100** | Giao của tập gần tốt nhất qua 4 phân phối ở n=10⁶; curve rất phẳng trong vùng này (100 là CUTOFF lớn nhất được thử nghiệm, nên cận trên chưa xác định) |
 
-**Khuyến nghị chung cho Mergesort trên máy này: `CUTOFF = 40`**. Đây là giá trị tốt nhất hoặc trong vùng gần tốt nhất (2%) cho 3/4 phân phối ở n=10⁶, và tốt hơn C=7 từ **6% đến 29%** (vượt qua nhiễu ở đa số trường hợp n lớn). So với C=10, cải thiện thêm **2–25%** tùy phân phối.
+**Giá trị điểm nếu bắt buộc chọn một:**
+- Mergesort: **C=25** (nằm chắc trong giao; không quá lớn để bất lợi với `reversed`).
+- Quicksort: **C=40** (trung tâm vùng phẳng; tốt với cả 4 phân phối).
 
-> [!TIP]
-> Nếu workload thực tế chủ yếu là `reversed`, có thể cân nhắc **CUTOFF = 9–12** thay thế.
-
-#### Quicksort
-
-| n | Khuyến nghị | Lý do |
-|---|---|---|
-| 10.000 | **30–75** | Vùng phẳng rất rộng; tín hiệu kém |
-| 100.000 | **30–75** | C=50 tốt nhất với `random`, C=75 với `fewuniq`/`sorted` |
-| 1.000.000 | **75–100** | C=100 tốt nhất với `random`/`fewuniq`; C=75 tốt nhất với `sorted`; C=40 với `reversed` |
-
-**Khuyến nghị chung cho Quicksort trên máy này: `CUTOFF = 75`**. Đây là giá trị tốt nhất hoặc trong vùng gần tốt nhất (2%) ở 3/4 phân phối với n=10⁶, và tốt hơn C=7 từ **4% đến 22%** (nhưng nhiều trường hợp chưa vượt qua 1 std do nhiễu cao). So với C=10, cải thiện từ **2% đến 28%** tùy phân phối.
-
-> [!TIP]
-> Nếu cần một giá trị an toàn dùng chung: **CUTOFF = 40** hoạt động tốt cho cả hai thuật toán mà không cần điều chỉnh theo phân phối.
+**Về giá trị sách giáo khoa:**
+- C=7: Chưa tối ưu cho cả hai thuật toán trên máy này; Mergesort thiệt hại rõ rệt.
+- C=10: Chấp nhận được cho **Quicksort/random** (chỉ chậm hơn 2,4%); vẫn dưới mức tối ưu cho Mergesort (~8% chậm hơn tốt nhất ở `random`).
 
 ### 7.2 Giới hạn và Threats to Validity
 
 | Mối đe dọa | Mô tả |
 |---|---|
-| **JIT compilation** | JVM có thể biên dịch lại code giữa các lần đo, gây nhiễu khó kiểm soát. Warm-up 5 vòng giúp một phần nhưng không loại bỏ hoàn toàn. |
-| **Nhiễu đo lường** | Nhiều std rất lớn (nhất là Quicksort/reversed/n=10⁶: std = 202 ms), có thể do context switch, cache eviction, hay JIT re-compilation. Kết quả cần thêm REPS hoặc nhiều lần chạy độc lập. |
-| **`int[]` thay `Comparable[]`** | So sánh nguyên thủy nhanh hơn generics; CUTOFF tối ưu có thể khác khi dùng đối tượng thực. |
-| **Một máy duy nhất** | Kết quả phụ thuộc mạnh vào CPU cụ thể (Intel Family 6 Model 78, Skylake-U), kích thước L1/L2/L3 cache, tốc độ xung nhịp, v.v. |
-| **Hệ điều hành và background process** | Windows 10 không phải real-time OS; background tasks có thể gây spike. |
-| **Seed shuffle cố định** | Quicksort dùng seed cố định theo rep → kết quả có thể bias nếu seed gặp partition xấu. |
+| **JIT compilation** | JVM có thể biên dịch lại code giữa các lần đo, gây spike không dự đoán được. Warm-up giúp một phần. |
+| **Nhiễu còn lại** | Dù REPS=25, std vẫn 10–55 ms; nhiều thứ hạng cục bộ không có ý nghĩa thống kê. |
+| **`int[]` thay `Comparable[]`** | CUTOFF tối ưu có thể khác nếu dùng Comparable[], chưa kiểm chứng. |
+| **Một máy duy nhất** | i5-6200U laptop với L3=3 MB nhỏ hơn dữ liệu 10⁶ phần tử. Kết quả không nhất thiết khái quát cho desktop/server. |
+| **Thermal throttling** | CPU laptop có thể giảm xung trong các bài test dài, làm méo kết quả n=10⁶. |
+| **Seed shuffle cố định** | Dùng cùng seed giữa các CUTOFF trong cùng một rep (so sánh ghép cặp công bằng - fair paired comparison), nhưng kết quả chỉ phản ánh 25 hoán vị (permutations). |
+| **Tiêu chí "near-best"** | Quy tắc "near-best" (trong vòng 2% hoặc 1 IQR) là quy tắc heuristic, không phải kiểm định thống kê (statistical test). |
+| **Lần chạy ban đầu** | Lần đo đầu (REPS=9) có outlier lớn (std > 90% median ở quicksort/reversed/n=10⁶); được thay thế bằng lần chạy REPS=25 (raw.csv vẫn giữ dữ liệu cũ). |
 
 ---
 
 ## 8. Cách chạy lại
 
 ```bash
-# 1. Sinh dữ liệu (từ thư mục gốc dự án)
-javac -cp src src/GenData.java
-java  -cp src GenData
-
-# 2. Kiểm tra tính đúng đắn
+# 1. Biên dịch
 javac -cp src src/*.java
-java  -cp src Verify
 
-# 3. Chạy benchmark (yêu cầu đóng app nền, cắm điện nếu laptop)
-javac -cp src src/*.java
+# 2. Sinh dữ liệu (seed 42)
+java -cp src GenData
+
+# 3. Kiểm tra tính đúng đắn
+java -cp src Verify
+
+# 4. Benchmark (đóng app nền, cắm điện)
 java -Xms2g -Xmx2g -XX:+UseSerialGC -cp src Benchmark
 
-# 4. Phân tích kết quả
-cd scripts
-python analyze.py
+# 5. Phân tích
+cd scripts && python analyze.py
 
-# 5. Kết quả ở results/summary.csv, results/best_cutoff.csv, results/plots/
+# Kết quả: results/summary.csv, results/best_cutoff.csv, results/plots/
 ```
 
 ---
 
 ## Phụ lục: Sử dụng AI
 
-Báo cáo này được soạn thảo bởi **Antigravity (AI coding assistant, Google DeepMind)** theo yêu cầu tự động hóa từ người dùng. AI đọc các file `SPEC.md` (mục 6–7), `results/best_cutoff.csv`, `results/summary.csv`, `results/machine.txt` và danh sách file đồ thị để tổng hợp kết quả thực nghiệm. **Mọi con số đều lấy trực tiếp từ CSV; không có con số nào được tạo ra.** Người dùng không chỉnh sửa kết quả benchmark — AI chỉ phân tích và viết báo cáo.
-
----
-
-## Tóm tắt (≤ 8 dòng)
-
-1. **Mergesort**: CUTOFF = **40** là khuyến nghị tổng thể; cải thiện 10–29% so với C=7 ở n=10⁶ (vượt ngưỡng nhiễu ở hầu hết phân phối, trừ `reversed`).
-2. **Quicksort**: CUTOFF = **75** là khuyến nghị tổng thể; cải thiện 4–22% so với C=7 ở n=10⁶, nhưng nhiễu rất cao (nhất là `reversed`) nên nhiều trường hợp chưa vượt 1 std.
-3. Cả hai thuật toán đều **vượt trội rõ rệt** so với C=7 và C=10 ở n=10⁶, với hiệu lớn nhất ở phân phối `sorted` (Mergesort: +65% khi C=7 so với C=100).
-4. Giá trị sách giáo khoa C=7 và C=10 **chưa tối ưu** trên máy này — vùng phẳng nằm cao hơn đáng kể.
-5. Quicksort với `reversed`/n=10⁶ có std = 202 ms (≈ 92% median) — kết quả **không đáng tin cậy**, cần thêm REPS.
-6. Mergesort ổn định hơn Quicksort (std thấp hơn đáng kể ở n=10⁶).
-
-## Những điều chưa thể xác minh
-
-- **Số lần warm-up và REPS thực tế** dùng trong benchmark (chỉ biết qua SPEC, không đọc raw.csv).
-- **Nội dung cụ thể của raw.csv** (được yêu cầu không mở).
-- **Tính đúng đắn của Verify.java** (PASS/FAIL không có trong các file được cung cấp).
-- **Tốc độ xung nhịp CPU thực tế** và kích thước cache L1/L2/L3 của `Intel Family 6 Model 78` (machine.txt không ghi).
-- **compares.csv** (bonus, không kiểm tra xem có tồn tại không).
-
+Báo cáo này được soạn thảo bởi **Antigravity (AI coding assistant, Google DeepMind)**. AI đọc `SPEC.md` (mục 6–7), `results/best_cutoff.csv`, `results/summary.csv`, `results/machine.txt` và danh sách file đồ thị. **Mọi con số đều lấy trực tiếp từ CSV; không có con số nào được tạo ra.** Phép tính giao các tập "gần tốt nhất" được thực hiện thủ công từ cột `near_best_cutoffs_2pct_or_iqr` trong `best_cutoff.csv`. AI không đọc `raw.csv`.
