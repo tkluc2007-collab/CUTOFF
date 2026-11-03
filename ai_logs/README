@@ -1,0 +1,4 @@
+Claude: lập kế hoạch, chia việc, viết SPEC.md, review kết quả và báo cáo.
+Codex:  Verify, GenData, Benchmark, analyze.py.
+Antigravity: viết báo cáo report.md từ số liệu, sửa mục 7.
+Tôi tự làm: viết code mergesort/quicksort, chạy benchmark trên máy, kiểm tra kết quả, ghi thông số máy, quyết định kết luận.
