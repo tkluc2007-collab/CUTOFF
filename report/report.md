@@ -1,6 +1,6 @@
 # Báo cáo: Tìm vùng CUTOFF tối ưu cho Mergesort và Quicksort
 
-> **Ngôn ngữ:** Java 21 · **Ngày thực hiện:** 30/10/2026
+> **Ngôn ngữ:** Java 21 ·
 
 ---
 
